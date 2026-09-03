@@ -1,7 +1,7 @@
 from logging.config import fileConfig
 
 from app.database.base import Base
-from app.models import Category
+from app.models import Category, p
 
 from sqlalchemy import engine_from_config
 from sqlalchemy import pool

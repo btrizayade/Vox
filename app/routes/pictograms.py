@@ -3,9 +3,11 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.database.connection import SessionLocal
+from app.models import User
 from app.models.category import Category
 from app.models.pictogram import Pictogram
 from app.schemas.pictogram import PictogramResponse
+from app.dependencies import get_current_user
 
 
 router = APIRouter(
@@ -28,6 +30,7 @@ def get_pictograms(
     category_id: int | None = Query(default=None),
     search: str | None = Query(default=None),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     statement = (
         select(
@@ -71,6 +74,7 @@ def get_pictograms(
 def get_pictogram(
     pictogram_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     statement = (
         select(

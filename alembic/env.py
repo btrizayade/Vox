@@ -1,7 +1,7 @@
 from logging.config import fileConfig
 
 from app.database.base import Base
-from app.models import Category, Pictogram, Profile, User
+from app.models import Category, Pictogram, Profile, User, Board
 
 from sqlalchemy import engine_from_config
 from sqlalchemy import pool

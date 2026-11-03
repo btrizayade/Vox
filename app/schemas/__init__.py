@@ -5,6 +5,11 @@ from app.schemas.profile import (
     ProfileUpdate,
     ProfileResponse,
 )
+from app.schemas.board import (
+    BoardCreate,
+    BoardUpdate,
+    BoardResponse,
+)
 
 __all__ = [
     "CategoryResponse",

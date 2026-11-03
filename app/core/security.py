@@ -11,6 +11,8 @@ SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
+if not SECRET_KEY:
+    raise ValueError("SECRET_KEY nao foi definida no arquivo .env")
 
 password_hash = PasswordHash.recommended()
 

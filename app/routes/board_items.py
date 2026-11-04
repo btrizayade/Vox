@@ -10,6 +10,7 @@ from app.models import Board, BoardItem, Category, Pictogram, Profile, User
 from app.schemas.board_item import (
     BoardItemCreate,
     BoardItemResponse,
+    BoardItemsReorder,
 )
 from app.schemas.pictogram import PictogramResponse
 
@@ -307,3 +308,101 @@ def remove_board_item(
         )
 
     return None
+
+@router.patch(
+    "/{board_id}/items/reorder",
+    response_model=list[BoardItemResponse],
+)
+def reorder_board_items(
+    board_id: int,
+    reorder_data: BoardItemsReorder,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    board = get_editable_board(db, board_id, current_user.id)
+
+    if board is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Prancha personalizada nao encontrada.",
+        )
+
+    # Busca todos os itens pertencentes a prancha.
+    board_items = db.execute(
+        select(BoardItem).where(
+            BoardItem.board_id == board_id
+        )
+    ).scalars().all()
+
+    items_by_id = {
+        item.id: item
+        for item in board_items
+    }
+
+    existing_ids = set(items_by_id.keys())
+    requested_ids = reorder_data.item_ids
+
+    # A lista precisa conter todos os itens da prancha.
+    if (
+        len(requested_ids) != len(existing_ids)
+        or set(requested_ids) != existing_ids
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="A lista nao pode conter IDs duplicados.",
+        )
+
+    try:
+        # Calcula uma faixa temporaria de posicoes.
+        max_position = max(
+            item.position for item in board_items
+        )
+
+        offset = max_position + len(board_items) + 1
+
+        # Primeira etapa: move os itens para posicoes temporarias.
+        # Isso evita conflitos com a restricao de unicidade.
+        for item in board_items:
+            item.position += offset
+
+        db.flush()
+
+        # Segunda etapa: aplica a nova ordem solicitada.
+        for new_position, item_id in enumerate(
+            requested_ids,
+            start=1,
+        ):
+            items_by_id[item_id].position = new_position
+
+        db.commit()
+
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Conflito ao reorganizar os itens. Atualize a prancha e tente novamente.",
+        )
+
+    # Recupera os itens na nova ordem, incluindo os dados dos pictogramas.
+    result = db.execute(
+        select(
+            BoardItem,
+            Pictogram,
+            Category.name.label("category_name"),
+        )
+        .join(Pictogram, BoardItem.pictogram_id == Pictogram.id)
+        .join(Category, Pictogram.category_id == Category.id)
+        .where(BoardItem.board_id == board_id)
+        .order_by(BoardItem.position)
+    )
+
+    rows = result.all()
+
+    return [
+        build_board_item_response(
+            board_item,
+            pictogram,
+            category_name,
+        )
+        for board_item, pictogram, category_name in rows
+    ]

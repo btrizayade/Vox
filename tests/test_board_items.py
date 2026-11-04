@@ -248,3 +248,175 @@ def test_cannot_remove_nonexistent_item(
     )
 
     assert response.status_code == 404
+
+def test_reorder_board_items(
+    authenticated_client,
+    board_id,
+    pictogram_ids,
+):
+    created_items = []
+
+    for pictogram_id in pictogram_ids:
+        response = authenticated_client.post(
+            f"/boards/{board_id}/items",
+            json={"pictogram_id": pictogram_id},
+        )
+
+        assert response.status_code == 201
+        created_items.append(response.json())
+
+    new_order = [
+        created_items[2]["id"],
+        created_items[0]["id"],
+        created_items[1]["id"],
+    ]
+
+    response = authenticated_client.patch(
+        f"/boards/{board_id}/items/reorder",
+        json={"item_ids": new_order},
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert [item["id"] for item in data] == new_order
+    assert [item["position"] for item in data] == [1, 2, 3]
+
+def test_reorder_requires_all_board_items(
+    authenticated_client,
+    board_id,
+    pictogram_ids,
+):
+    created_items = []
+
+    for pictogram_id in pictogram_ids:
+        response = authenticated_client.post(
+            f"/boards/{board_id}/items",
+            json={"pictogram_id": pictogram_id},
+        )
+
+        assert response.status_code == 201
+        created_items.append(response.json())
+
+    response = authenticated_client.patch(
+        f"/boards/{board_id}/items/reorder",
+        json={
+            "item_ids": [
+                created_items[0]["id"],
+                created_items[1]["id"],
+            ]
+        },
+    )
+
+    assert response.status_code == 422
+
+    # A ordem original deve ser preservada.
+    list_response = authenticated_client.get(
+        f"/boards/{board_id}/items"
+    )
+
+    assert [
+        item["id"] for item in list_response.json()
+    ] == [
+        item["id"] for item in created_items
+    ]
+
+def test_reorder_rejects_duplicate_ids(
+    authenticated_client,
+    board_id,
+    pictogram_ids,
+):
+    response = authenticated_client.post(
+        f"/boards/{board_id}/items",
+        json={"pictogram_id": pictogram_ids[0]},
+    )
+
+    assert response.status_code == 201
+
+    item_id = response.json()["id"]
+
+    response = authenticated_client.patch(
+        f"/boards/{board_id}/items/reorder",
+        json={"item_ids": [item_id, item_id]},
+    )
+
+    assert response.status_code == 422
+
+def test_reorder_rejects_item_from_another_board(
+    authenticated_client,
+    board_id,
+    pictogram_ids,
+):
+    created_items = []
+
+    for pictogram_id in pictogram_ids[:2]:
+        response = authenticated_client.post(
+            f"/boards/{board_id}/items",
+            json={"pictogram_id": pictogram_id},
+        )
+
+        assert response.status_code == 201
+        created_items.append(response.json())
+
+    board_response = authenticated_client.get(
+        f"/boards/{board_id}"
+    )
+
+    profile_id = board_response.json()["profile_id"]
+
+    other_board_response = authenticated_client.post(
+        "/boards/",
+        json={
+            "profile_id": profile_id,
+            "name": "Outra prancha",
+        },
+    )
+
+    assert other_board_response.status_code == 201
+
+    other_board_id = other_board_response.json()["id"]
+
+    foreign_item_response = authenticated_client.post(
+        f"/boards/{other_board_id}/items",
+        json={"pictogram_id": pictogram_ids[2]},
+    )
+
+    assert foreign_item_response.status_code == 201
+
+    foreign_item_id = foreign_item_response.json()["id"]
+
+    response = authenticated_client.patch(
+        f"/boards/{board_id}/items/reorder",
+        json={
+            "item_ids": [
+                created_items[0]["id"],
+                foreign_item_id,
+            ]
+        },
+    )
+
+    assert response.status_code == 422
+
+def test_cannot_reorder_system_board(
+    authenticated_client,
+    system_board_id,
+    pictogram_ids,
+    db_session,
+):
+    board_item = BoardItem(
+        board_id=system_board_id,
+        pictogram_id=pictogram_ids[0],
+        position=1,
+    )
+
+    db_session.add(board_item)
+    db_session.commit()
+    db_session.refresh(board_item)
+
+    response = authenticated_client.patch(
+        f"/boards/{system_board_id}/items/reorder",
+        json={"item_ids": [board_item.id]},
+    )
+
+    assert response.status_code == 404

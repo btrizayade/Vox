@@ -5,10 +5,10 @@ from app.schemas.profile import (
     ProfileUpdate,
     ProfileResponse,
 )
-from app.schemas.board import (
-    BoardCreate,
-    BoardUpdate,
-    BoardResponse,
+from app.schemas.board_item import (
+    BoardItemCreate,
+    BoardItemResponse,
+    BoardItemsReorder,
 )
 
 __all__ = [
@@ -17,4 +17,8 @@ __all__ = [
     "ProfileCreate",
     "ProfileUpdate",
     "ProfileResponse",
+    "BoardCreate",
+    "BoardUpdate",
+    "BoardResponse",
+    "BoardItemsReorder",
 ]

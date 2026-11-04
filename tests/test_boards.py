@@ -1,3 +1,4 @@
+from app.models import Board
 
 def test_create_board(authenticated_client, profile_id):
     response = authenticated_client.post(
@@ -134,3 +135,91 @@ def test_user_cannot_access_another_users_board(
     )
 
     assert create_response.status_code == 404
+
+def test_list_system_boards(
+    authenticated_client,
+    system_board_id,
+):
+    response = authenticated_client.get("/boards/system")
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert len(data) == 1
+    assert data[0]["id"] == system_board_id
+    assert data[0]["name"] == "Escola"
+    assert data[0]["board_type"] == "system"
+    assert data[0]["profile_id"] is None
+
+
+def test_user_can_get_system_board(
+    authenticated_client,
+    system_board_id,
+):
+    response = authenticated_client.get(
+        f"/boards/{system_board_id}"
+    )
+
+    assert response.status_code == 200
+    assert response.json()["board_type"] == "system"
+
+
+def test_system_boards_do_not_appear_in_custom_list(
+    authenticated_client,
+    system_board_id,
+):
+    response = authenticated_client.get("/boards/")
+
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+def test_user_cannot_update_system_board(
+    authenticated_client,
+    system_board_id,
+):
+    response = authenticated_client.put(
+        f"/boards/{system_board_id}",
+        json={"name": "Escola modificada"},
+    )
+
+    assert response.status_code == 404
+
+
+def test_user_cannot_delete_system_board(
+    authenticated_client,
+    system_board_id,
+    db_session,
+):
+    response = authenticated_client.delete(
+        f"/boards/{system_board_id}"
+    )
+
+    assert response.status_code == 404
+
+    board = db_session.get(Board, system_board_id)
+
+    assert board is not None
+    assert board.name == "Escola"
+
+
+def test_user_cannot_create_system_board(
+    authenticated_client,
+    profile_id,
+):
+    response = authenticated_client.post(
+        "/boards/",
+        json={
+            "profile_id": profile_id,
+            "name": "Prancha nao autorizada",
+            "board_type": "system",
+        },
+    )
+
+    assert response.status_code == 201
+
+    data = response.json()
+
+    assert data["board_type"] == "custom"
+    assert data["profile_id"] == profile_id

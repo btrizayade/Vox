@@ -1,7 +1,7 @@
+
 import os
 
 # Configuracoes exclusivas para os testes.
-# Evita depender do .env ou do Supabase.
 os.environ["SECRET_KEY"] = "vox-test-secret-key-2026-automated-tests-only"
 os.environ.setdefault("DATABASE_URL", "sqlite://")
 
@@ -15,11 +15,11 @@ from sqlalchemy.pool import StaticPool
 from app.database.base import Base
 from app.database.connection import get_db
 from app.main import app
-from app.models import Board, Category, Pictogram, Profile, User
+from app.models import Board, BoardItem, Category, Pictogram, Profile, User
 
 
 @pytest.fixture
-def client():
+def testing_session_factory():
     engine = create_engine(
         "sqlite://",
         connect_args={"check_same_thread": False},
@@ -40,8 +40,27 @@ def client():
         bind=engine,
     )
 
+    try:
+        yield TestingSessionLocal
+    finally:
+        Base.metadata.drop_all(bind=engine)
+        engine.dispose()
+
+
+@pytest.fixture
+def db_session(testing_session_factory):
+    db = testing_session_factory()
+
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+@pytest.fixture
+def client(testing_session_factory):
     def override_get_db():
-        db = TestingSessionLocal()
+        db = testing_session_factory()
 
         try:
             yield db
@@ -55,8 +74,7 @@ def client():
             yield test_client
     finally:
         app.dependency_overrides.clear()
-        Base.metadata.drop_all(bind=engine)
-        engine.dispose()
+
 
 @pytest.fixture
 def authenticated_client(client):
@@ -65,7 +83,6 @@ def authenticated_client(client):
         "password": "TestPassword123!",
     }
 
-    # Cria um usuario para o teste
     register_response = client.post(
         "/auth/register",
         json=credentials,
@@ -73,7 +90,6 @@ def authenticated_client(client):
 
     assert register_response.status_code == 201, register_response.text
 
-    # Faz login e obtem o JWT
     login_response = client.post(
         "/auth/login",
         data={
@@ -86,12 +102,12 @@ def authenticated_client(client):
 
     token = login_response.json()["access_token"]
 
-    # Adiciona o token as requisicoes seguintes
     client.headers.update({
         "Authorization": f"Bearer {token}"
     })
 
     return client
+
 
 @pytest.fixture
 def profile_id(authenticated_client):
@@ -119,3 +135,49 @@ def board_id(authenticated_client, profile_id):
 
     return response.json()["id"]
 
+@pytest.fixture
+def system_board_id(db_session):
+    board = Board(
+        profile_id=None,
+        name="Escola",
+        board_type="system",
+    )
+
+    db_session.add(board)
+    db_session.commit()
+    db_session.refresh(board)
+
+    return board.id
+
+@pytest.fixture
+def pictogram_ids(db_session):
+    category = Category(name="Alimentacao")
+
+    db_session.add(category)
+    db_session.flush()
+
+    pictograms = [
+        Pictogram(
+            name="Agua",
+            image_url="https://example.com/agua.png",
+            category_id=category.id,
+        ),
+        Pictogram(
+            name="Comida",
+            image_url="https://example.com/comida.png",
+            category_id=category.id,
+        ),
+        Pictogram(
+            name="Fruta",
+            image_url="https://example.com/fruta.png",
+            category_id=category.id,
+        ),
+    ]
+
+    db_session.add_all(pictograms)
+    db_session.commit()
+
+    for pictogram in pictograms:
+        db_session.refresh(pictogram)
+
+    return [pictogram.id for pictogram in pictograms]

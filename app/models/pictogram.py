@@ -7,6 +7,7 @@ from sqlalchemy import (
     ForeignKey,
     Integer,
     String,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -19,10 +20,15 @@ class Pictogram(Base):
     __table_args__ = (
         CheckConstraint(
             "(profile_id IS NULL AND image_url IS NOT NULL "
-            "AND storage_path IS NULL) OR "
+            "AND storage_path IS NULL AND content_hash IS NULL) OR "
             "(profile_id IS NOT NULL AND image_url IS NULL "
-            "AND storage_path IS NOT NULL)",
+            "AND storage_path IS NOT NULL AND content_hash IS NOT NULL)",
             name="ck_pictograms_image_source_by_owner",
+        ),
+        UniqueConstraint(
+            "profile_id",
+            "content_hash",
+            name="uq_pictograms_profile_content_hash",
         ),
     )
 
@@ -47,6 +53,12 @@ class Pictogram(Base):
     # Sera preenchido somente para pictogramas personalizados.
     storage_path: Mapped[str | None] = mapped_column(
         String(500),
+        nullable=True,
+    )
+
+    # Hash SHA-256 do arquivo original para impedir duplicatas por perfil.
+    content_hash: Mapped[str | None] = mapped_column(
+        String(64),
         nullable=True,
     )
 

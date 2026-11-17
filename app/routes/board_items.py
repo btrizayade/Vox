@@ -13,6 +13,7 @@ from app.schemas.board_item import (
     BoardItemsReorder,
 )
 from app.schemas.pictogram import PictogramResponse
+from app.services.pictogram_storage import create_pictogram_signed_url
 
 
 router = APIRouter(
@@ -73,6 +74,13 @@ def build_board_item_response(
 ):
     """Monta a resposta com os dados do item e do pictograma."""
 
+    image_url = pictogram.image_url
+
+    if pictogram.profile_id is not None:
+        image_url = create_pictogram_signed_url(
+            pictogram.storage_path
+        )
+
     return BoardItemResponse(
         id=board_item.id,
         board_id=board_item.board_id,
@@ -81,7 +89,7 @@ def build_board_item_response(
         pictogram=PictogramResponse(
             id=pictogram.id,
             name=pictogram.name,
-            image_url=pictogram.image_url,
+            image_url=image_url,
             category_id=pictogram.category_id,
             category_name=category_name,
             created_at=pictogram.created_at,
@@ -132,6 +140,16 @@ def add_board_item(
         )
 
     pictogram, category_name = pictogram_row
+
+    # Impede o uso de pictogramas de outro perfil.
+    if (
+        pictogram.profile_id is not None
+        and pictogram.profile_id != board.profile_id
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Pictograma nao encontrado.",
+        )
 
     # Impede adicionar o mesmo pictograma duas vezes na prancha.
     existing_item = db.execute(
@@ -219,7 +237,13 @@ def get_board_items(
             Category,
             Pictogram.category_id == Category.id,
         )
-        .where(BoardItem.board_id == board_id)
+        .where(
+            BoardItem.board_id == board_id,
+            or_(
+                Pictogram.profile_id.is_(None),
+                Pictogram.profile_id == board.profile_id,
+            ),
+        )
         .order_by(BoardItem.position)
     )
 
@@ -329,8 +353,17 @@ def reorder_board_items(
 
     # Busca todos os itens pertencentes a prancha.
     board_items = db.execute(
-        select(BoardItem).where(
-            BoardItem.board_id == board_id
+        select(BoardItem)
+        .join(
+            Pictogram,
+            BoardItem.pictogram_id == Pictogram.id,
+        )
+        .where(
+            BoardItem.board_id == board_id,
+            or_(
+                Pictogram.profile_id.is_(None),
+                Pictogram.profile_id == board.profile_id,
+            ),
         )
     ).scalars().all()
 
@@ -392,7 +425,13 @@ def reorder_board_items(
         )
         .join(Pictogram, BoardItem.pictogram_id == Pictogram.id)
         .join(Category, Pictogram.category_id == Category.id)
-        .where(BoardItem.board_id == board_id)
+        .where(
+            BoardItem.board_id == board_id,
+            or_(
+                Pictogram.profile_id.is_(None),
+                Pictogram.profile_id == board.profile_id,
+            ),
+        )
         .order_by(BoardItem.position)
     )
 

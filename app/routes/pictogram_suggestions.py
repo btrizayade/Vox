@@ -1,5 +1,7 @@
+from datetime import datetime, timedelta, timezone
+
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -37,6 +39,68 @@ def create_pictogram_suggestion(
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Categoria nao encontrada.",
+            )
+
+    # Bloqueia a linha do usuario durante a verificacao dos limites.
+    db.execute(
+        select(User)
+        .where(User.id == current_user.id)
+        .with_for_update()
+    ).scalar_one()
+
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+
+    # Verifica o limite de 3 sugestoes por mes-calendario.
+    month_start = datetime(now.year, now.month, 1)
+
+    monthly_count = db.execute(
+        select(func.count(PictogramSuggestion.id)).where(
+            PictogramSuggestion.user_id == current_user.id,
+            PictogramSuggestion.created_at >= month_start,
+        )
+    ).scalar_one()
+
+    if monthly_count >= 3:
+        if now.month == 12:
+            next_month = datetime(now.year + 1, 1, 1)
+        else:
+            next_month = datetime(now.year, now.month + 1, 1)
+
+        retry_after = max(
+            1,
+            int((next_month - now).total_seconds()) + 1,
+        )
+
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Voce atingiu o limite de 3 sugestoes neste mes.",
+            headers={"Retry-After": str(retry_after)},
+        )
+
+    # Verifica o intervalo minimo de 1 hora entre envios.
+    last_suggestion_at = db.execute(
+        select(PictogramSuggestion.created_at)
+        .where(PictogramSuggestion.user_id == current_user.id)
+        .order_by(
+            PictogramSuggestion.created_at.desc(),
+            PictogramSuggestion.id.desc(),
+        )
+        .limit(1)
+    ).scalar_one_or_none()
+
+    if last_suggestion_at is not None:
+        next_allowed_at = last_suggestion_at + timedelta(hours=1)
+
+        if now < next_allowed_at:
+            retry_after = max(
+                1,
+                int((next_allowed_at - now).total_seconds()) + 1,
+            )
+
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Aguarde 1 hora entre o envio de sugestoes.",
+                headers={"Retry-After": str(retry_after)},
             )
 
     suggestion = PictogramSuggestion(

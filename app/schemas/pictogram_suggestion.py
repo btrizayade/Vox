@@ -11,7 +11,7 @@ from pydantic import (
 
 
 class PictogramSuggestionCreate(BaseModel):
-    name: str = Field(min_length=1, max_length=100)
+    name: str = Field(min_length=1, max_length=50)
 
     category_id: int | None = Field(default=None, gt=0)
 
@@ -20,9 +20,12 @@ class PictogramSuggestionCreate(BaseModel):
         max_length=100,
     )
 
-    description: str = Field(min_length=1)
+    description: str = Field(min_length=1, max_length=500)
 
-    usage_context: str | None = None
+    usage_context: str | None = Field(
+        default=None,
+        max_length=500,
+    )
 
     @field_validator("name", "description")
     @classmethod

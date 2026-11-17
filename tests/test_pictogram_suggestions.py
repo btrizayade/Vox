@@ -3,6 +3,7 @@ from pydantic import ValidationError
 
 from app.schemas.pictogram_suggestion import PictogramSuggestionCreate
 from app.models import Category, PictogramSuggestion, User
+from datetime import datetime, timedelta, timezone
 
 
 def test_create_suggestion_with_existing_category():
@@ -226,3 +227,113 @@ def test_list_suggestions_requires_authentication(client):
     response = client.get("/pictogram-suggestions/")
 
     assert response.status_code == 401
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("name", "A" * 51),
+        ("description", "A" * 501),
+        ("usage_context", "A" * 501),
+    ],
+)
+def test_suggestion_rejects_text_over_limit(field, value):
+    payload = {
+        "name": "Agua",
+        "category_id": 1,
+        "description": "Representacao de agua.",
+        "usage_context": "Durante as refeicoes.",
+    }
+
+    payload[field] = value
+
+    with pytest.raises(ValidationError):
+        PictogramSuggestionCreate(**payload)
+
+
+def test_suggestion_accepts_maximum_text_lengths():
+    suggestion = PictogramSuggestionCreate(
+        name="A" * 50,
+        category_id=1,
+        description="D" * 500,
+        usage_context="C" * 500,
+    )
+
+    assert len(suggestion.name) == 50
+    assert len(suggestion.description) == 500
+    assert len(suggestion.usage_context) == 500
+
+def test_suggestion_hourly_limit(
+    authenticated_client,
+    db_session,
+):
+    user = (
+        db_session.query(User)
+        .filter(User.email == "owner@example.com")
+        .first()
+    )
+
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+
+    previous_suggestion = PictogramSuggestion(
+        user_id=user.id,
+        name="Sugestao anterior",
+        other_category="Outra",
+        description="Descricao anterior.",
+        created_at=now - timedelta(minutes=30),
+    )
+
+    db_session.add(previous_suggestion)
+    db_session.commit()
+
+    response = authenticated_client.post(
+        "/pictogram-suggestions/",
+        json={
+            "name": "Nova sugestao",
+            "other_category": "Outra",
+            "description": "Descricao da nova sugestao.",
+        },
+    )
+
+    assert response.status_code == 429
+    assert "Retry-After" in response.headers
+    assert int(response.headers["Retry-After"]) > 0
+
+def test_suggestion_monthly_limit(
+    authenticated_client,
+    db_session,
+):
+    user = (
+        db_session.query(User)
+        .filter(User.email == "owner@example.com")
+        .first()
+    )
+
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    month_start = datetime(now.year, now.month, 1)
+
+    suggestions = [
+        PictogramSuggestion(
+            user_id=user.id,
+            name=f"Sugestao {i}",
+            other_category="Outra",
+            description="Descricao de teste.",
+            created_at=month_start + timedelta(seconds=i),
+        )
+        for i in range(3)
+    ]
+
+    db_session.add_all(suggestions)
+    db_session.commit()
+
+    response = authenticated_client.post(
+        "/pictogram-suggestions/",
+        json={
+            "name": "Quarta sugestao",
+            "other_category": "Outra",
+            "description": "Descricao da quarta sugestao.",
+        },
+    )
+
+    assert response.status_code == 429
+    assert "Retry-After" in response.headers
+    assert int(response.headers["Retry-After"]) > 0

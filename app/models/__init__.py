@@ -4,6 +4,7 @@ from app.models.user import User
 from app.models.profile import Profile
 from app.models.board import Board
 from app.models.board_item import BoardItem
+from app.models.pictogram_suggestion import PictogramSuggestion
 
 __all__ = [
     "Category",
@@ -12,4 +13,5 @@ __all__ = [
     "Profile",
     "Board",
     "BoardItem",
+    "PictogramSuggestion",
 ]

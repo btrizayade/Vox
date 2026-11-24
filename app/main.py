@@ -9,6 +9,9 @@ from app.routes.board_items import router as board_items_router
 from app.routes.custom_pictograms import (
     router as custom_pictograms_router,
 )
+from app.routes.pictogram_suggestions import (
+    router as pictogram_suggestions_router,
+)
 
 app = FastAPI(
     title="VOX API",
@@ -24,6 +27,7 @@ app.include_router(profiles_router)
 app.include_router(boards_router)
 app.include_router(board_items_router)
 app.include_router(custom_pictograms_router)
+app.include_router(pictogram_suggestions_router)
 
 @app.get("/")
 def root():

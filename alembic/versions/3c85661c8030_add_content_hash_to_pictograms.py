@@ -41,7 +41,7 @@ def upgrade() -> None:
         "(profile_id IS NULL AND image_url IS NOT NULL "
         "AND storage_path IS NULL AND content_hash IS NULL) OR "
         "(profile_id IS NOT NULL AND image_url IS NULL "
-        "AND storage_path IS NOT NULL AND content_hash IS NOT NULL)",
+        "AND storage_path IS NOT NULL)",
     )
 
     # Impede que o mesmo arquivo seja cadastrado duas vezes

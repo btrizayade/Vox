@@ -22,7 +22,7 @@ class Pictogram(Base):
             "(profile_id IS NULL AND image_url IS NOT NULL "
             "AND storage_path IS NULL AND content_hash IS NULL) OR "
             "(profile_id IS NOT NULL AND image_url IS NULL "
-            "AND storage_path IS NOT NULL AND content_hash IS NOT NULL)",
+            "AND storage_path IS NOT NULL)",
             name="ck_pictograms_image_source_by_owner",
         ),
         UniqueConstraint(

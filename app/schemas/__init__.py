@@ -1,4 +1,5 @@
 from app.schemas.category import CategoryResponse
+from app.schemas.board import BoardCreate, BoardResponse, BoardUpdate
 from app.schemas.pictogram import PictogramResponse
 from app.schemas.profile import (
     ProfileCreate,
@@ -14,11 +15,13 @@ from app.schemas.board_item import (
 __all__ = [
     "CategoryResponse",
     "PictogramResponse",
-    "ProfileCreate",
-    "ProfileUpdate",
-    "ProfileResponse",
     "BoardCreate",
     "BoardUpdate",
     "BoardResponse",
+    "ProfileCreate",
+    "ProfileUpdate",
+    "ProfileResponse",
+    "BoardItemCreate",
+    "BoardItemResponse",
     "BoardItemsReorder",
 ]

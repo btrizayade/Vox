@@ -1,17 +1,17 @@
-import os
-
-from dotenv import load_dotenv
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-load_dotenv()
-
-DATABASE_URL = os.getenv("DATABASE_URL")
+from app.core.config import DATABASE_URL
 
 if not DATABASE_URL:
     raise ValueError("DATABASE_URL não foi definida no arquivo .env")
 
-engine = create_engine(DATABASE_URL)
+engine_options = {"pool_pre_ping": True}
+
+if DATABASE_URL.startswith(("postgresql://", "postgresql+psycopg2://")):
+    engine_options["connect_args"] = {"connect_timeout": 10}
+
+engine = create_engine(DATABASE_URL, **engine_options)
 
 SessionLocal = sessionmaker(
     autocommit=False,
